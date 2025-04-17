@@ -1,0 +1,56 @@
+# Pipeline 的类型，其他的还有 secret and signature。
+kind: pipeline
+
+# 定义了执行任务的类型，这里会使用 Docker 执行。
+type: docker
+
+# 定义 Pipline 的名字，一个 .drone.yml 可以有多个不同名字的 Pipeline。
+name: web
+
+#定义setups，每个setup有属于自己的name，最后会显示在Drone CI管理页面的侧边栏
+steps:
+  - name: build
+    image: docker
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - docker build -t demo:latest .
+
+  - name: push
+    image: plugins/docker
+    settings:
+      registry: 192.168.1.115
+      repo: 192.168.1.115/pipeline/demo # 你的 DockerHub 仓库
+      tags: latest
+      username: robot$gocd-bot
+      password: otsdaFS53R1s4d6C8DkS5bRrg5ejNjtx
+
+  - name: deploy
+    image: appleboy/ssh
+    settings:
+      host: your.server.com # 远程服务器地址
+      username: your-username # 服务器用户名
+      port: 22
+      script:
+        - docker pull 192.168.1.115/pipeline/demo:latest
+        - docker stop demo || true
+        - docker rm demo || true
+        - docker run -d -p 80:80 --name demo 192.168.1.115/pipeline/demo:latest
+
+# 挂载宿主机文件到docker容器中
+volumes:
+  - name: sock
+    host:
+      path: /var/run/docker.sock
+
+# 创建触发器，绑定分支及事件及上一次成功时才运行
+trigger:
+  branch:
+    - master
+  event:
+    - pull_request
+    - push
+  status:
+    - success
+    - failure
